@@ -196,6 +196,19 @@
     margin-top:2px; padding:12px; border-radius:12px; border:none;
     background:var(--navy-900); color:#fff; font-size:13.5px; font-weight:800; cursor:pointer;
   }
+  .loan-row{
+    background:var(--bg); border:1.4px solid var(--line); border-radius:12px;
+    padding:10px 11px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px;
+  }
+  .loan-row-top{display:flex; align-items:center; justify-content:space-between;}
+  .loan-row-top .tag{font-size:11.5px; font-weight:800; color:var(--ink-dim);}
+  .loan-row-top .rm-btn{
+    border:none; background:none; color:#C62828; font-size:11.5px; font-weight:700; cursor:pointer; padding:2px 4px;
+  }
+  .add-loan-btn{
+    padding:9px; border-radius:10px; border:1.4px dashed var(--line); background:none;
+    color:var(--ink-dim); font-size:12.5px; font-weight:700; cursor:pointer;
+  }
   .red-notice{
     color:#C62828; font-size:12.5px; font-weight:700; line-height:1.65;
     background:rgba(198,40,40,0.08); border:1px solid rgba(198,40,40,0.35);
@@ -1597,6 +1610,41 @@
   }
 
   // ---------- 소득/부채/희망금액 → 월납입액 · DSR 계산 ----------
+  const EXISTING_LOAN_TYPES = ['신용대출','주택담보대출','전세자금대출','자동차대출','카드론','학자금대출','기타'];
+  const EXISTING_LOAN_DEFAULTS = {
+    '신용대출':{months:60, method:'만기일시'},
+    '주택담보대출':{months:360, method:'만기일시'},
+    '전세자금대출':{months:24, method:'만기일시'},
+    '자동차대출':{months:60, method:'만기일시'},
+    '카드론':{months:36, method:'만기일시'},
+    '학자금대출':{months:120, method:'만기일시'},
+    '기타':{months:60, method:'만기일시'}
+  };
+  function annualRepayment(balance, ratePct, months, method){
+    balance = parseFloat(balance)||0; ratePct = parseFloat(ratePct)||0; months = parseInt(months)||0;
+    if(balance<=0 || months<=0) return 0;
+    const r = ratePct/100/12;
+    if(method === '만기일시'){
+      const years = months/12;
+      const principalPortion = years>0 ? balance/years : 0;
+      return balance * (ratePct/100) + principalPortion;
+    }
+    if(method === '원금균등'){
+      const monthlyPrincipal = balance/months;
+      const n = Math.min(12, months);
+      let interestSum = 0;
+      for(let i=0;i<n;i++){
+        const remain = balance - monthlyPrincipal*i;
+        interestSum += remain * r;
+      }
+      return monthlyPrincipal*n + interestSum;
+    }
+    // 원리금균등 (default)
+    let pmt;
+    if(r===0){ pmt = balance/months; }
+    else { pmt = balance * r * Math.pow(1+r, months) / (Math.pow(1+r, months)-1); }
+    return pmt * Math.min(12, months);
+  }
   function calcAnnuityMonthly(principal, annualRatePct, months){
     const r = annualRatePct/100/12;
     if(r===0) return principal/months;
@@ -1621,11 +1669,14 @@
           endWithAgent();
           return;
         }
-        addBotBubble('아래 항목을 입력해주시면 희망금액 기준으로 월납입액과 DSR을 바로 계산해드릴게요.', ()=>{
-          addFinanceForm(maxLoan, (data)=>{
-            jipdanShowMonthlyAndDSR(data.loan, data.rate, data.term, data.totalIncome, data.debt, data.cardAmt, data.cardIncome, endWithAgent);
-          }, maxLoan);
-        });
+        const openForm = ()=>{
+          addBotBubble('아래 항목을 입력해주시면 희망금액 기준으로 월납입액과 DSR을 바로 계산해드릴게요.', ()=>{
+            addFinanceForm(maxLoan, (data)=>{
+              jipdanShowMonthlyAndDSR(data.loan, data.rate, data.term, data.totalIncome, data.debt, data.cardAmt, data.cardIncome, endWithAgent, openForm);
+            }, maxLoan);
+          });
+        };
+        openForm();
       });
     });
   }
@@ -1664,23 +1715,62 @@
       <div class="ff-field"><label>연금소득(만원)</label><input type="text" inputmode="numeric" id="ff_pension" placeholder="0"><div class="kr-preview" id="ff_pension_p"></div></div>
       <div class="ff-field"><label>작년도 카드사용금액(만원, 해당 없으면 0)</label><input type="text" inputmode="numeric" id="ff_card" placeholder="0"><div class="kr-preview" id="ff_card_p"></div></div>
       <div class="ff-note">⚠ 카드사용내역으로 소득산정 시 부부합산소득이 2,400만원 이하여야 가능해요.</div>
-      <div class="ff-field"><label>기존 부채 연간 원리금상환액(만원)</label><input type="text" inputmode="numeric" id="ff_debt" placeholder="0"><div class="kr-preview" id="ff_debt_p"></div></div>
+      <div class="ff-field"><label>기존 대출 (있으면 종류별로 추가해주세요)</label></div>
+      <div id="ff_existing_wrap"></div>
+      <button type="button" class="add-loan-btn" id="ff_add_loan">+ 기존 대출 추가</button>
       ${loanFieldHtml}
       <div class="ff-field"><label>적용 금리(연 %)</label><input type="text" inputmode="decimal" id="ff_rate" placeholder="4.5"></div>
       <div class="ff-field"><label>대출기간(년, 최대 40)</label><input type="text" inputmode="numeric" id="ff_term" placeholder="40"></div>
       <button class="ff-submit" id="ff_submit">계산하기</button>
     `;
     chatEl.appendChild(wrap); scrollDown();
-    (fixedLoan ? ['ff_earned','ff_biz','ff_pension','ff_card','ff_debt'] : ['ff_earned','ff_biz','ff_pension','ff_card','ff_debt','ff_loan']).forEach(id=>{
+    (fixedLoan ? ['ff_earned','ff_biz','ff_pension','ff_card'] : ['ff_earned','ff_biz','ff_pension','ff_card','ff_loan']).forEach(id=>{
       attachMoneyPreview(wrap.querySelector('#'+id), wrap.querySelector('#'+id+'_p'), '만원');
     });
+    const existingWrapEl = wrap.querySelector('#ff_existing_wrap');
+    let loanRowCounter = 0;
+    function addLoanRow(){
+      loanRowCounter++;
+      const row = document.createElement('div');
+      row.className = 'loan-row';
+      row.innerHTML = `
+        <div class="loan-row-top"><span class="tag">기존대출 ${loanRowCounter}</span><button type="button" class="rm-btn">삭제</button></div>
+        <div class="ff-field"><label>종류</label>
+          <select class="el-type">
+            <option value="">선택</option>
+            ${EXISTING_LOAN_TYPES.map(t=>`<option value="${t}">${t}</option>`).join('')}
+          </select>
+        </div>
+        <div class="ff-field"><label>잔액(만원)</label><input type="text" inputmode="numeric" class="el-balance" placeholder="0"><div class="kr-preview el-balance-p"></div></div>
+        <div class="ff-field"><label>금리(연 %)</label><input type="text" inputmode="decimal" class="el-rate" placeholder="4.5"></div>
+        <div class="ff-field"><label>만기(개월)</label><input type="text" inputmode="numeric" class="el-months" placeholder="60"></div>
+        <div class="ff-field"><label>상환방식</label>
+          <select class="el-method"><option>만기일시</option><option>원리금균등</option><option>원금균등</option></select>
+        </div>
+      `;
+      existingWrapEl.appendChild(row);
+      attachMoneyPreview(row.querySelector('.el-balance'), row.querySelector('.el-balance-p'), '만원');
+      row.querySelector('.el-type').addEventListener('change', (e)=>{
+        const def = EXISTING_LOAN_DEFAULTS[e.target.value];
+        if(def){ row.querySelector('.el-months').value = def.months; row.querySelector('.el-method').value = def.method; }
+      });
+      row.querySelector('.rm-btn').addEventListener('click', ()=>{ row.remove(); });
+    }
+    wrap.querySelector('#ff_add_loan').onclick = addLoanRow;
     document.getElementById('ff_submit').onclick = ()=>{
       const num = id => Number((document.getElementById(id).value||'0').replace(/[^0-9]/g,''))||0;
       let rate = parseFloat((document.getElementById('ff_rate').value||'0').replace(/[^0-9.]/g,''));
       if(isNaN(rate)) rate = 0;
       let term = num('ff_term'); if(!term) term = 40; term = Math.min(term, 40);
       const earned = num('ff_earned')*10000, biz = num('ff_biz')*10000, pension = num('ff_pension')*10000, cardAmt = num('ff_card')*10000;
-      const debt = num('ff_debt')*10000;
+      let debt = 0;
+      existingWrapEl.querySelectorAll('.loan-row').forEach(row=>{
+        const balance = Number((row.querySelector('.el-balance').value||'0').replace(/[^0-9]/g,''))*10000;
+        const elRate = parseFloat((row.querySelector('.el-rate').value||'0').replace(/[^0-9.]/g,''))||0;
+        const months = Number((row.querySelector('.el-months').value||'0').replace(/[^0-9]/g,''))||0;
+        const method = row.querySelector('.el-method').value;
+        debt += annualRepayment(balance, elRate, months, method);
+      });
       let loan = fixedLoan ? Math.round(fixedLoan) : (num('ff_loan')*10000 || Math.round(maxLoan));
       const cardIncome = cardAmt>0 ? cardAmt/0.409*0.9 : 0;
       const totalIncome = earned+biz+pension+cardIncome;
@@ -1689,7 +1779,16 @@
       onSubmit({ totalIncome, cardAmt, cardIncome, debt, loan, rate, term });
     };
   }
-  function jipdanShowMonthlyAndDSR(loanAmount, ratePct, termYears, totalIncome, existingDebtAnnual, cardAmt, cardIncome, onDone){
+  function offerRedoOrContinue(onDone, onRedo, delay){
+    setTimeout(()=>{
+      if(!onRedo){ onDone(); return; }
+      addChoices(['입력값 수정하기', '확인했어요 ▶'], (choice)=>{
+        if(choice==='입력값 수정하기'){ onRedo(); }
+        else { onDone(); }
+      }, true);
+    }, delay);
+  }
+  function jipdanShowMonthlyAndDSR(loanAmount, ratePct, termYears, totalIncome, existingDebtAnnual, cardAmt, cardIncome, onDone, onRedo){
     if(!onDone) onDone = endWithAgent;
     const months = termYears*12;
     const monthlyRate = ratePct/100/12;
@@ -1715,7 +1814,7 @@
               ['원리금균등 월납입액', `원금 ${won(Math.round(annuityFirstPrincipal))} + 이자 ${won(Math.round(annuityFirstInterest))} = ${won(Math.round(annuityMonthly))}`, true],
               ['원금균등 월납입액(1회차)', `원금 ${won(Math.round(equalPrincipalMonthlyPrincipal))} + 이자 ${won(Math.round(equalPrincipalFirstInterest))} = ${won(Math.round(equalPrincipalFirstMonth))}`, true],
             ], '원리금균등은 매월 동일하고, 원금균등은 회차가 지날수록 이자가 줄어 납입액이 점점 감소해요. (표시된 이자·합계는 1회차 기준)');
-            setTimeout(onDone, 900);
+            offerRedoOrContinue(onDone, onRedo, 900);
           });
           return;
         }
@@ -1747,7 +1846,7 @@
             setTimeout(()=>{
               addRedNotice('실제 DSR 산정 기준은 상담사가 다시 확인드려요.');
             }, 600);
-            setTimeout(onDone, 1300);
+            offerRedoOrContinue(onDone, onRedo, 1300);
           }, 900);
         });
       });
@@ -1892,11 +1991,14 @@
           endWithAgent();
           return;
         }
-        addBotBubble('아래 항목을 입력해주시면 희망금액 기준으로 월납입액과 DSR을 바로 계산해드릴게요.', ()=>{
-          addFinanceForm(loanAmount, (data)=>{
-            jipdanShowMonthlyAndDSR(data.loan, data.rate, data.term, data.totalIncome, data.debt, data.cardAmt, data.cardIncome, endWithAgent);
-          }, loanAmount);
-        });
+        const openForm = ()=>{
+          addBotBubble('아래 항목을 입력해주시면 희망금액 기준으로 월납입액과 DSR을 바로 계산해드릴게요.', ()=>{
+            addFinanceForm(loanAmount, (data)=>{
+              jipdanShowMonthlyAndDSR(data.loan, data.rate, data.term, data.totalIncome, data.debt, data.cardAmt, data.cardIncome, endWithAgent, openForm);
+            }, loanAmount);
+          });
+        };
+        openForm();
       });
     });
   }
