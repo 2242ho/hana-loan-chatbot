@@ -262,6 +262,9 @@
   const AGENT_SMS_PHONE = '01036152242';
   // ---------- 금리 기준일 (매일 금리 갱신할 때 이 값만 바꾸면 전체에 반영돼요) ----------
   const RATE_AS_OF = '2026.11.10';
+  // 신규취급액 COFIX (집단대출 기준금리 · 금리표 갱신 시 같이 변경)
+  const COFIX_NEW = 3.430;
+  const JIPDAN_SURCHARGE = 2.1, JIPDAN_PREF = 0.9;
   // ---------- 집단대출 취급 마감일 (더샵탕정인피니티시티1차 · 입주기간 종료일) ----------
   const JIPDAN_DEADLINE = '2027.03.03';
   const JIPDAN_APT_NAME = '더샵탕정인피니티시티1차';
@@ -743,11 +746,18 @@
       loanExecution: '입주기간과 동일 · 2027.03.03 이후 집단대출 실행 불가',
       areas: '84㎡, 96㎡',
       pending: true,       // 감정가 본점승인 진행 중
-      ratePending: true,   // 금리 본점승인 진행 중
+      ratePending: false,  // 금리 확정 전 예상금리 안내 중
+      rateNote: '※ 본점 승인 전 예상금리예요. 실제 승인금리는 달라질 수 있고, 최종금리는 대출실행일(잔금일) 기준으로 확정돼요.',
+      get rateItems(){
+        const base = COFIX_NEW, full = base + JIPDAN_SURCHARGE;
+        return [
+          { name:'신규COFIX 6개월 변동금리 · 우대금리 0.9%p 모두 적용 시 (예상)', value:(full-JIPDAN_PREF).toFixed(3)+'%', base:`기준금리(신규취급액 COFIX) ${base.toFixed(3)}% + 가산 ${JIPDAN_SURCHARGE}%p − 우대 ${JIPDAN_PREF}%p` },
+          { name:'신규COFIX 6개월 변동금리 · 우대금리 미적용 (예상)', value:full.toFixed(3)+'%', base:`기준금리(신규취급액 COFIX) ${base.toFixed(3)}% + 가산 ${JIPDAN_SURCHARGE}%p` },
+        ];
+      },
       units: [],
       loanTerm: '추후 안내',
-      rateItems: [],
-      preferentialRates: ['추후 안내'],
+      preferentialRates: ['급여이체 0.4%p\n청약(또는 적금) 0.2%p\n카드 월30만원↑ 0.2%p\n카드 월70만원↑ 추가 0.1%p\n(합계 최대 0.9%p · 일반주택담보대출과 동일 항목)'],
       lawFirm: '법무법인 SM파트너스 (1544-1964)',
       branchByDong: BRANCH_BY_DONG,
     },
@@ -777,7 +787,7 @@
     addBotBubble(name+' 금리 안내해드릴게요.', ()=>{
       addRateCard(rateCardTitle(), info.rateItems);
       setTimeout(()=>{
-        addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
+        addRateNotice(info.rateNote || '위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
       }, 600);
       setTimeout(()=>{
         addStepCard('대출기간 · 추가우대', [
@@ -951,7 +961,7 @@
         addBotBubble('금리도 안내해드릴게요.', ()=>{
           addRateCard(rateCardTitle(), info.rateItems);
           setTimeout(()=>{
-            addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
+            addRateNotice(info.rateNote || '위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
             setTimeout(done, 600);
           }, 600);
         });
@@ -1884,7 +1894,7 @@
         addBotBubble('대출조건도 함께 안내해드릴게요.', ()=>{
           addRateCard(rateCardTitle(), aptInfo.rateItems);
           setTimeout(()=>{
-            addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
+            addRateNotice(aptInfo.rateNote || '위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
             setTimeout(done, 750);
           }, 750);
         });
@@ -2170,13 +2180,14 @@
 
   function showGeneralRateInfo(){
     if(!PRODUCT_CHOSEN){
-      addBotBubble('아직 상품을 선택하지 않으셨네요. 일반주택담보대출·전세대출 금리를 한 번에 안내해드릴게요.', ()=>{
+      addBotBubble('아직 상품을 선택하지 않으셨네요. 3가지 상품 금리를 한 번에 안내해드릴게요.', ()=>{
         addRateCard(rateCardTitle('대표 적용금리'), [
+          { name:'집단대출 · 신규COFIX 6개월변동 (더샵탕정인피니티시티1차 · 예상)', value:APARTMENT_INFO[JIPDAN_APT_NAME].rateItems[0].value, base:'기준금리(신규COFIX)+가산2.1%p−우대0.9%p 모두 적용 시 · 본점 승인 전 예상' },
           { name:'일반주택담보대출 · 5년변동금리(기본 안내)', value:'4.976%~5.006%', base:'기준금리(금융채5년물)+가산금리-0.9%우대금리적용시-전자계약0.2%추가우대시 · 6개월변동·혼합도 가능' },
           { name:'전세대출 · 우량주택전세자금 기준', value:'4.951%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대 · 상품별 상이' },
         ]);
         setTimeout(()=>{
-          addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.\n집단대출('+JIPDAN_APT_NAME+')은 금리 본점 승인 진행 중이에요.');
+          addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
         }, 600);
         setTimeout(()=>{
           addBotBubble('어떤 상품으로 자세히 안내해드릴까요?', ()=>{
