@@ -261,10 +261,10 @@
   const AGENT_PHONE = '01036152242';
   const AGENT_SMS_PHONE = '01036152242';
   // ---------- 금리 기준일 (매일 금리 갱신할 때 이 값만 바꾸면 전체에 반영돼요) ----------
-  const RATE_AS_OF = '2026.10.14';
-  // ---------- 집단대출 취급 마감일 (탕정푸르지오리버파크) ----------
-  const JIPDAN_DEADLINE = '2026.10.08';
-  const JIPDAN_APT_NAME = '탕정푸르지오리버파크';
+  const RATE_AS_OF = '2026.11.10';
+  // ---------- 집단대출 취급 마감일 (더샵탕정인피니티시티1차 · 입주기간 종료일) ----------
+  const JIPDAN_DEADLINE = '2027.03.03';
+  const JIPDAN_APT_NAME = '더샵탕정인피니티시티1차';
   function isJipdanClosed(){
     const [y,m,d] = JIPDAN_DEADLINE.split('.').map(Number);
     const deadline = new Date(y, m-1, d, 23, 59, 59);
@@ -709,18 +709,24 @@
   // ---------- 등록된 아파트현장 (집단대출 LTV 계산 선택버튼용) ----------
   const APARTMENT_SITES = [
     {
-      name: '탕정푸르지오리버파크',
+      name: '더샵탕정인피니티시티1차',
+      pending: true, // 감정가 본점승인 진행 중 — 나오면 price 채우고 pending 제거
       units: [
-        { area:'59', floors:[ {label:'1층', price:'28000'}, {label:'2층~4층', price:'30800'}, {label:'5층이상', price:'34300'} ] },
-        { area:'74', floors:[ {label:'1층', price:'35000'}, {label:'2층~4층', price:'38500'}, {label:'5층이상', price:'41100'} ] },
-        { area:'84', floors:[ {label:'1층', price:'39700'}, {label:'2층~4층', price:'43700'}, {label:'5층이상', price:'46700'} ] },
+        { area:'84', floors:[ {label:'1층', price:''}, {label:'2층~4층', price:''}, {label:'5층이상', price:''} ] },
+        { area:'96', floors:[ {label:'1층', price:''}, {label:'2층~4층', price:''}, {label:'5층이상', price:''} ] },
       ],
     },
   ];
 
   // ---------- 아낌이(보금자리론) 신청 시 아파트별 희망 하나은행 지점 ----------
+  // 값이 문자열이면 단일 지점, 객체면 동별 지점
+  const BRANCH_BY_DONG = {
+    '102동~104동': '하나은행 쌍용동지점',
+    '107동, 108동': '하나은행 아산금융센터',
+    '101동, 105동, 106동': '하나은행 불당지점',
+  };
   const AKKIM_BRANCH_MAP = {
-    '탕정푸르지오리버파크': '불당지점',
+    '더샵탕정인피니티시티1차': BRANCH_BY_DONG,
   };
 
   // ---------- 자유입력으로 물어보면 답해주는 아파트 정보 (선택버튼으로는 노출 안 함) ----------
@@ -731,26 +737,19 @@
     return e+'억 '+rest.toLocaleString('ko-KR')+'만원';
   }
   const APARTMENT_INFO = {
-    '탕정푸르지오리버파크': {
-      keywords: ['탕정', '푸르지오리버파크', '탕정푸르지오'],
-      moveIn: '2026.08.10 ~ 2026.10.08',
-      loanExecution: '입주기간과 동일 · 2026.10.08 이후 집단대출 실행 불가',
-      units: [
-        { area:'59', prices:{ '1층':28000, '2~4층':30800, '5층이상':34300 } },
-        { area:'74', prices:{ '1층':35000, '2~4층':38500, '5층이상':41100 } },
-        { area:'84', prices:{ '1층':39700, '2~4층':43700, '5층이상':46700 } },
-      ],
-      loanTerm: '최대 40년',
-      rateItems: [
-        { name:'6개월 변동금리', value:'5.133%', base:'기준금리(금융채6개월) 3.733% + 가산 1.4%p' },
-        { name:'혼합금리 (5년고정 후 변동)', value:'5.343%', base:'기준금리(금융채5년물) 4.343% + 가산 1.0%p' },
-      ],
-      preferentialRates: [
-        '미성년자녀 2명 0.1%p / 미성년자녀 3명 이상 0.2%p (면적제한 없음, 둘 다 적용)',
-      ],
-      lawFirm: '아크로법무법인',
-      moveInCenter: '041-546-7420 (팩스 041-546-7421)',
-      prugioCenter: '1670-1000',
+    '더샵탕정인피니티시티1차': {
+      keywords: ['더샵탕정', '탕정인피니티', '인피니티시티', '탕정더샵'],
+      moveIn: '2026.12.31 ~ 2027.03.03',
+      loanExecution: '입주기간과 동일 · 2027.03.03 이후 집단대출 실행 불가',
+      areas: '84㎡, 96㎡',
+      pending: true,       // 감정가 본점승인 진행 중
+      ratePending: true,   // 금리 본점승인 진행 중
+      units: [],
+      loanTerm: '추후 안내',
+      rateItems: [],
+      preferentialRates: ['추후 안내'],
+      lawFirm: '법무법인 SM파트너스 (1544-1964)',
+      branchByDong: BRANCH_BY_DONG,
     },
   };
   function findApartmentInfo(text){
@@ -768,6 +767,13 @@
     return { name: names[0], info: APARTMENT_INFO[names[0]] };
   }
   function showRateInfo(name, info){
+    if(info.ratePending){
+      addBotBubble(name+' 금리는 본점 승인 진행 중이에요.\n승인되는 대로 안내해드릴게요 🙏', ()=>{
+        if(isJipdanClosed()) addRedNotice(JIPDAN_CLOSED_MSG);
+        else addRedNotice('⚠ 집단대출실행은 입주기간과 동일하며, '+JIPDAN_DEADLINE+' 이후에는 집단대출 실행이 불가해요.');
+      });
+      return;
+    }
     addBotBubble(name+' 금리 안내해드릴게요.', ()=>{
       addRateCard(rateCardTitle(), info.rateItems);
       setTimeout(()=>{
@@ -928,7 +934,8 @@
           addSummaryCard('입주 · 분양가 안내', [
             ['입주기간', info.moveIn],
             ['대출실행 가능기간', info.loanExecution],
-            ...priceRows,
+            ...(info.areas ? [['전용면적', info.areas]] : []),
+            ...(info.pending ? [['감정가', '본점 승인 진행 중 (나오는 대로 안내)']] : priceRows),
           ], '감정가는 실제 감정평가 결과에 따라 달라질 수 있어요.');
           if(isJipdanClosed()){
             setTimeout(()=>addRedNotice(JIPDAN_CLOSED_MSG), 500);
@@ -937,6 +944,10 @@
         });
       },
       (done)=>{
+        if(info.ratePending){
+          addBotBubble('금리는 본점 승인 진행 중이에요. 승인되는 대로 안내해드릴게요 🙏', ()=>setTimeout(done, 600));
+          return;
+        }
         addBotBubble('금리도 안내해드릴게요.', ()=>{
           addRateCard(rateCardTitle(), info.rateItems);
           setTimeout(()=>{
@@ -951,8 +962,7 @@
             ['대출기간', info.loanTerm],
             ['추가우대 (중복불가, 택1)', info.preferentialRates.join('\n')],
             ['지정 법무법인', info.lawFirm],
-            ['입주지원센터', info.moveInCenter],
-            ['푸르지오 고객센터', info.prugioCenter],
+            ...(info.branchByDong ? [['동별 접수지점', Object.entries(info.branchByDong).map(([d,b])=>d+' → '+b).join('\n')]] : []),
           ]);
           setTimeout(done, 600);
         });
@@ -1295,7 +1305,10 @@
         ['대상 소득 조건', '부부합산소득에 따라 소득이 적거나 많아도 대상이 안 될 수 있어요'],
       ]);
       setTimeout(()=>{
-        if(branch){
+        if(branch && typeof branch==='object'){
+          addStepCard('대출신청 시 동별 접수지점 (본인 동의 지점으로 꼭 신청해주세요)', Object.entries(branch).map(([d,b])=>[d,b]));
+          setTimeout(()=>addRedNotice('⚠ 해당 동의 지점으로 신청하셔야 담당 대출상담사가 승인 후 진행을 도와드릴 수 있어요.'), 400);
+        } else if(branch){
           addBranchBadge('대출신청 시 아래 지점으로 꼭 신청해주세요', `하나은행 ${branch}`, '그래야 담당 대출상담사가 승인 후 진행을 도와드릴 수 있어요.');
         } else {
           addRedNotice('⚠ 대출신청 시 희망은행은 반드시 하나은행 지점으로 신청 부탁드려요.\n해당 지점명은 담당 상담사에게 문의해주세요.\n그래야 담당 대출상담사가 승인 후 진행을 도와드릴 수 있어요.');
@@ -1523,7 +1536,11 @@
         floorPreview.style.color = '';
         return;
       }
-      if(result.floor && result.floor.price){
+      const siteNow = currentSite();
+      if(siteNow && siteNow.pending){
+        floorPreview.textContent = `${result.floorNum}층 · 감정가 본점 승인 진행 중이에요.`;
+        floorPreview.style.color = '';
+      } else if(result.floor && result.floor.price){
         floorPreview.textContent = `${result.floorNum}층 → ${result.floor.label} 구간 · 예상 분양가 ${eok(Number(result.floor.price)*10000)}`;
         floorPreview.style.color = '';
       } else {
@@ -1567,6 +1584,10 @@
         if(!result || result.floorNum===null){
           addBotBubble('동호수를 확인할 수 없어요. "1305" 또는 "101동 1305호" 형태로 다시 입력해주세요 🙏');
           hoInput.focus();
+          return;
+        }
+        if(site.pending){
+          addBotBubble('이 아파트는 감정가가 본점 승인 진행 중이라 아직 한도 계산이 어려워요.\n승인되는 대로 안내해드릴게요 🙏 (급하시면 \'직접 입력할게요\'로 분양가를 넣어 대략 계산해볼 수 있어요)');
           return;
         }
         if(!result.floor || !result.floor.price){
@@ -1855,11 +1876,13 @@
   function jipdanShowLoanTermsAndCosts(loanAmount){
     runSteps([
       (done)=>{
+        const aptInfo = APARTMENT_INFO[JIPDAN_APT_NAME];
+        if(aptInfo && aptInfo.ratePending){
+          addBotBubble('금리는 본점 승인 진행 중이에요. 승인되는 대로 안내해드릴게요 🙏', ()=>setTimeout(done, 600));
+          return;
+        }
         addBotBubble('대출조건도 함께 안내해드릴게요.', ()=>{
-          addRateCard(rateCardTitle(), [
-            { name:'6개월 변동금리', value:'5.133%', base:'기준금리(금융채6개월) 3.733% + 가산 1.4%p' },
-            { name:'혼합금리 (5년고정 후 변동)', value:'5.343%', base:'기준금리(금융채5년물) 4.343% + 가산 1.0%p' },
-          ]);
+          addRateCard(rateCardTitle(), aptInfo.rateItems);
           setTimeout(()=>{
             addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
             setTimeout(done, 750);
@@ -1867,10 +1890,12 @@
         });
       },
       (done)=>{
+        const aptInfo = APARTMENT_INFO[JIPDAN_APT_NAME];
         addBotBubble('대출기간과 추가우대도 알려드릴게요.', ()=>{
           addStepCard('대출기간 · 추가우대', [
-            ['대출기간', '최대 40년 가능'],
-            ['추가우대 (중복불가, 아래 중 택1)', '미성년자녀 2명 0.1%p\n미성년자녀 3명 이상 0.2%p (면적제한 없음, 둘 다 적용)'],
+            ['대출기간', aptInfo.loanTerm],
+            ['추가우대 (중복불가, 아래 중 택1)', aptInfo.preferentialRates.join('\n')],
+            ...(aptInfo.branchByDong ? [['동별 접수지점', Object.entries(aptInfo.branchByDong).map(([d,b])=>d+' → '+b).join('\n')]] : []),
           ]);
           setTimeout(done, 600);
         });
@@ -1963,8 +1988,7 @@
   }
   function jutaekShowResult(houseType, disposalCond, ltv, price, desiredLoan){
     const ltvMaxLoan = price*(ltv/100);
-    const mciDeduction = 25000000;
-    const maxLoan = Math.max(ltvMaxLoan - mciDeduction, 0);
+    const maxLoan = Math.max(ltvMaxLoan, 0);
     const finalLoan = desiredLoan>0 ? desiredLoan : maxLoan;
     addBotBubble('계산해볼게요.', ()=>{
       addSummaryCard('예상 대출 가능금액 (일반주택담보대출)', [
@@ -1972,10 +1996,9 @@
         ['적용 LTV', ltv+'%', true],
         ['기준금액', krAmount(price)],
         ['LTV 기준 한도', krAmount(ltvMaxLoan)],
-        ['MCI 미가입 차감', '- '+krAmount(mciDeduction)],
         ['예상 최대 대출가능금액', krAmount(maxLoan), true],
         ...(desiredLoan>0 ? [['대출 희망금액', krAmount(finalLoan), true]] : []),
-      ], 'MCI(모기지신용보험) 미가입으로 LTV 기준 한도에서 2,500만원을 차감했어요. 실제 한도는 감정가·소득·기존부채(DSR)에 따라 달라질 수 있어요. 최종 한도는 상담사가 확정해드려요.');
+      ], '실제 한도는 감정가·소득·기존부채(DSR)에 따라 달라질 수 있어요. 최종 한도는 상담사가 확정해드려요.');
       if(houseType==='1주택보유' && disposalCond){
         setTimeout(()=>{
           addRedNotice('⚠ 잔금당일 처분조건(70%) 적용 시 아래 서류가 필요해요.\n· 매도 매매계약서\n· 매도 계약금입금내역서 첨부');
@@ -2007,7 +2030,9 @@
       (done)=>{
         addBotBubble('대출조건도 함께 안내해드릴게요.', ()=>{
           addRateCard(rateCardTitle(), [
-            { name:'혼합금리(5년고정이후6개월변동금리)-부수거래0.9%감면시-전자계약0.2%추가우대시', value:'5.423%~5.453%', base:'기준금리(금융채5년물) 4.343% + 가산금리 1.280~1.310%p(부수거래0.9%감면 기준) · 전자계약 0.2% 추가우대 적용' },
+            { name:'5년변동금리(금융채5년물 변동·5년 주기) · 기본 안내 — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'4.976%~5.006%', base:'기준금리(금융채5년물) 4.057% + 가산금리 1.119~1.149%p(부수거래0.9%감면 기준) · 전자계약 0.2% 추가우대 적용 · 3가지 중 가장 낮아요' },
+          { name:'혼합금리(5년고정이후6개월변동금리) — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'5.137%~5.167%', base:'기준금리(금융채5년물) 4.057% + 가산금리 1.280~1.310%p' },
+          { name:'6개월변동금리(금융채6개월) — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'5.366%~5.396%', base:'기준금리(금융채6개월) 3.827% + 가산금리 1.739~1.769%p' },
           ]);
           setTimeout(()=>{
             addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
@@ -2019,7 +2044,7 @@
         addBotBubble('대출조건과 우대금리도 알려드릴게요.', ()=>{
           addStepCard('대출조건 · 우대금리', [
             ['대출기간', '최대 40년'],
-            ['금리 종류', '6개월변동 / 혼합금리(5년고정 후 6개월변동) / 5년변동 — 현재는 혼합금리만 취급 가능'],
+            ['금리 종류', '5년변동(기본 안내·가장 저렴) / 혼합금리(5년고정 후 6개월변동) / 6개월변동 — 모두 취급 가능'],
             ['우대금리', '급여이체 0.4%p\n청약(월5만원↑) 또는 적금(월10만원↑) 0.2%p\n카드 월30만원↑ 0.2%p\n카드 월70만원↑ 추가 0.1%p'],
             ['다자녀 우대 선택 시 (전자계약 대신, 중복불가)', '2자녀·85㎡ 이하 −0.1%p\n3자녀 이상 −0.2%p (면적제한 없음)'],
           ]);
@@ -2077,11 +2102,11 @@
               ], '실제 한도는 보증기관 심사·소득에 따라 달라질 수 있어요. 최종 한도는 상담사가 확정해드려요.');
               setTimeout(()=>{
                 const surcharge = jeonseSurchargeByAmount(maxLoan);
-                const jusinboFinal = (4.765 - 0.2 + surcharge).toFixed(3);
+                const jusinboFinal = (4.871 - 0.2 + surcharge).toFixed(3);
                 addRateCard(rateCardTitle(), [
                   { name:'주신보 전세자금대출', value:jusinboFinal+'%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대+주택출연료(보증비율90%·지방)' },
-                  { name:'우량주택전세자금', value:'4.835%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
-                  { name:'전세금안심대출', value:'4.685%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
+                  { name:'우량주택전세자금', value:'4.951%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
+                  { name:'전세금안심대출', value:'4.791%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
                 ]);
                 setTimeout(()=>{
                   addRateNotice('위 금리는 오늘 기준 적용금리예요. 신용등급(ASS)에 따라 달라질 수 있고, 실제 최종금리는 대출실행일(잔금일) 기준으로 확정돼요.');
@@ -2145,15 +2170,13 @@
 
   function showGeneralRateInfo(){
     if(!PRODUCT_CHOSEN){
-      addBotBubble('아직 상품을 선택하지 않으셨네요. 3가지 상품 금리를 한 번에 안내해드릴게요.', ()=>{
+      addBotBubble('아직 상품을 선택하지 않으셨네요. 일반주택담보대출·전세대출 금리를 한 번에 안내해드릴게요.', ()=>{
         addRateCard(rateCardTitle('대표 적용금리'), [
-          { name:'집단대출 · 6개월변동 (탕정푸르지오리버파크)', value:'5.133%', base:'기준금리(금융채6개월)3.733%+가산1.4%p · 전자계약 우대 없음' },
-          { name:'집단대출 · 혼합금리 (탕정푸르지오리버파크)', value:'5.343%', base:'기준금리(금융채5년물)4.343%+가산1.0%p · 전자계약 우대 없음' },
-          { name:'일반주택담보대출 · 혼합금리', value:'5.423%~5.453%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약0.2%추가우대시' },
-          { name:'전세대출 · 우량주택전세자금 기준', value:'4.835%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대 · 상품별 상이' },
+          { name:'일반주택담보대출 · 5년변동금리(기본 안내)', value:'4.976%~5.006%', base:'기준금리(금융채5년물)+가산금리-0.9%우대금리적용시-전자계약0.2%추가우대시 · 6개월변동·혼합도 가능' },
+          { name:'전세대출 · 우량주택전세자금 기준', value:'4.951%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대 · 상품별 상이' },
         ]);
         setTimeout(()=>{
-          addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
+          addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.\n집단대출('+JIPDAN_APT_NAME+')은 금리 본점 승인 진행 중이에요.');
         }, 600);
         setTimeout(()=>{
           addBotBubble('어떤 상품으로 자세히 안내해드릴까요?', ()=>{
@@ -2170,7 +2193,9 @@
     if(CURRENT_PRODUCT==='일반주택담보대출'){
       addBotBubble('일반주택담보대출 금리 안내해드릴게요.', ()=>{
         addRateCard(rateCardTitle(), [
-          { name:'혼합금리(5년고정이후6개월변동금리)-부수거래0.9%감면시-전자계약0.2%추가우대시', value:'5.423%~5.453%', base:'기준금리(금융채5년물) 4.343% + 가산금리 1.280~1.310%p(부수거래0.9%감면 기준) · 전자계약 0.2% 추가우대 적용' },
+          { name:'5년변동금리(금융채5년물 변동·5년 주기) · 기본 안내 — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'4.976%~5.006%', base:'기준금리(금융채5년물) 4.057% + 가산금리 1.119~1.149%p(부수거래0.9%감면 기준) · 전자계약 0.2% 추가우대 적용 · 3가지 중 가장 낮아요' },
+          { name:'혼합금리(5년고정이후6개월변동금리) — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'5.137%~5.167%', base:'기준금리(금융채5년물) 4.057% + 가산금리 1.280~1.310%p' },
+          { name:'6개월변동금리(금융채6개월) — 부수거래0.9%감면·전자계약0.2%추가우대시', value:'5.366%~5.396%', base:'기준금리(금융채6개월) 3.827% + 가산금리 1.739~1.769%p' },
         ]);
         setTimeout(()=>{
           addRateNotice('위 금리는 오늘 기준 적용금리예요. 실제 최종금리는 대출실행일(잔금일) 기준으로 다시 확정돼요.');
@@ -2179,16 +2204,17 @@
     } else if(CURRENT_PRODUCT==='전세대출'){
       addBotBubble('전세대출 금리 안내해드릴게요.', ()=>{
         addRateCard(rateCardTitle(), [
-          { name:'주신보 전세자금대출', value:'4.565%~', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대+주택출연료(구간별 0~0.10%p 별도)' },
-          { name:'우량주택전세자금', value:'4.835%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
-          { name:'전세금안심대출', value:'4.685%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
+          { name:'주신보 전세자금대출', value:'4.671%~', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대+주택출연료(구간별 0~0.10%p 별도)' },
+          { name:'우량주택전세자금', value:'4.951%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
+          { name:'전세금안심대출', value:'4.791%', base:'기준금리+가산금리-0.9%우대금리적용시-전자계약시0.2%추가우대' },
         ]);
         setTimeout(()=>{
           addRateNotice('위 금리는 오늘 기준 적용금리예요. 신용등급(ASS)에 따라 달라질 수 있고, 실제 최종금리는 대출실행일(잔금일) 기준으로 확정돼요.');
         }, 600);
       });
     } else {
-      showRateInfo('탕정푸르지오리버파크', APARTMENT_INFO['탕정푸르지오리버파크']);
+      if(isJipdanClosed()){ addRedNotice(JIPDAN_CLOSED_MSG); }
+      else showRateInfo(JIPDAN_APT_NAME, APARTMENT_INFO[JIPDAN_APT_NAME]);
     }
   }
   function showGeneralPrepaymentInfo(){
